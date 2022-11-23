@@ -33,7 +33,7 @@ export class Signin extends BaseEntity {
   hash: string;
 
   /**
-   * insert email in user before signin
+   * Insert email in user before signin
    */
   @OneToOne((type) => User, {
     onUpdate: 'CASCADE',

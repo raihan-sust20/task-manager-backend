@@ -1,34 +1,60 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Transactional } from 'typeorm-transactional-cls-hooked';
+import * as bcrypt from 'bcrypt';
+import * as R from 'ramda';
+import { Repository } from 'typeorm';
 import { IGetSignin } from './interfaces/get-signin.interface';
 import { Signin } from './signin.entity';
-import { SigninRepository } from './signin.repository';
 
 @Injectable()
 export class SigninService {
   constructor(
-    @InjectRepository(SigninRepository)
-    private signinRepository: SigninRepository,
+    @InjectRepository(Signin)
+    private signinRepository: Repository<Signin>,
   ) {}
 
-  @Transactional()
   async createSignin(email: string, password: string): Promise<Signin> {
-    return this.signinRepository.createSignin(email, password);
+    const newSigin = new Signin();
+    newSigin.email = email;
+    newSigin.hash = await bcrypt.hash(password, 10);
+    await this.signinRepository.save(newSigin);
+
+    return newSigin;
   }
 
-  @Transactional()
   async getSignin(query: IGetSignin): Promise<Signin> {
-    return this.signinRepository.findOne(query);
+    return this.signinRepository.findOne({
+      where: query,
+    });
   }
 
-  @Transactional()
-  async changeUserPassword(email: string, newPassword: string): Promise<boolean> {
-    return this.signinRepository.changeUserPassword(email, newPassword);
+  async changeUserPassword(
+    email: string,
+    newPassword: string,
+  ): Promise<Record<string, any>> {
+    const response = await this.signinRepository.update(
+      { email },
+      { hash: await bcrypt.hash(newPassword, 10) },
+    );
+
+    const { affected } = response;
+    if (affected === 0) {
+      throw new BadRequestException('Update user password failed');
+    }
+    const updatedSignin = await this.signinRepository.findOne({
+      where: { email },
+    });
+
+    return R.pick(['signinId', 'email'])(updatedSignin);
   }
 
-  @Transactional()
   async validatePassword(email: string, newPassword: string): Promise<boolean> {
-    return this.signinRepository.validatePassword(email, newPassword);
+    const signinData = await this.signinRepository.findOne({
+      where: {
+        email,
+      },
+    });
+
+    return bcrypt.compare(newPassword, signinData.hash);
   }
 }

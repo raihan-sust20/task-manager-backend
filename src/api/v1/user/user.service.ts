@@ -7,13 +7,16 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as bcrypt from 'bcrypt';
 import {
   paginate,
   Pagination,
   IPaginationOptions,
 } from 'nestjs-typeorm-paginate';
 import * as R from 'ramda';
+import { Repository } from 'typeorm';
 //inputs
 import { ChangeUserEmailInput } from './inputs/change-user-email.input';
 import { ChangeUserPasswordInput } from './inputs/change-user-password.input';
@@ -48,12 +51,11 @@ import { SignupUsersType } from './types/signup-users.type';
 // interfaces
 import { ISignupResponseData } from './interfaces/signup.interface';
 // entity
-import { User } from './entities/user.entity';
-// repository
-import { UserRepository } from './user.repository';
+import { User, UserRole } from './entities/user.entity';
 // services
 import { ActivationService } from './activation/activation.service';
 import { SigninService } from './signin/signin.service';
+import { IUser } from './interfaces/user.interface';
 
 /**
  * Service methods for UserResolver.
@@ -64,8 +66,8 @@ export class UserService {
   private readonly ADMIN_SIGN_UP_UNLOCK_KEY;
 
   constructor(
-    @InjectRepository(UserRepository)
-    private usersRepository: UserRepository,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
 
     private readonly signinServices: SigninService,
 
@@ -78,17 +80,6 @@ export class UserService {
       'ADMIN_SIGN_UP_UNLOCK_KEY',
     );
   }
-
-  // async getUserById(userId: string): Promise<GetUserByIdResponseType> {
-  //   const request = new naas.auth.getUserByIdInput({
-  //     userId,
-  //   });
-  //   const response = await this.authService.getUserById(request).toPromise();
-
-  //   return {
-  //     user: response,
-  //   };
-  // }
 
   async paginate(
     options: PaginationInput,
@@ -108,11 +99,13 @@ export class UserService {
   /**
    * Compare a email and password against the database and return a JSON Web
    * Token (if the login was successful).
-   * @param signinInput ISigninResult
+   * @param signinInput
    */
   async signin(signinInput: SigninInput): Promise<SigninResponseType> {
     const user = await this.usersRepository.findOne({
-      email: signinInput.email,
+      where: {
+        email: signinInput.email,
+      },
     });
 
     if (user) {
@@ -149,8 +142,13 @@ export class UserService {
         return {
           userId: user.userId,
           email: user.email,
+          name: user.name,
+          division: user.division,
+          designation: user.designation,
           joined: user.joined ? user.joined.toISOString() : '',
-          modified: user.modified ? user.modified.toISOString() : '',
+          lastModified: user.lastModified
+            ? user.lastModified.toISOString()
+            : '',
           lastSignin: user.lastSignin ? user.lastSignin.toISOString() : '',
           activated: user.activated,
           role: user.role,
@@ -170,13 +168,13 @@ export class UserService {
       password,
       lang,
       adminKey,
-      settings,
       skipActivationEmail,
       activateUser,
-      createFirstSignin,
     } = signupRequest;
     const user = await this.usersRepository.findOne({
-      email,
+      where: {
+        email,
+      },
     });
     if (user) {
       throw new UnauthorizedException('User already exists');
@@ -186,11 +184,7 @@ export class UserService {
     if (adminKey !== 'N/A' && !isAdmin) {
       throw new UnauthorizedException('Invalid admin key');
     }
-    const newUser = await this.usersRepository.createUser(
-      email,
-      settings,
-      isAdmin,
-    );
+    const newUser = await this.createUser(email, isAdmin);
     await this.signinServices.createSignin(email, password);
 
     const { userId, role } = newUser;
@@ -215,14 +209,17 @@ export class UserService {
     }
     // admin feature: activate user
     if (activateUser) {
-      await this.activateUser({ userId });
+      await this.activateUser(userId);
     }
 
     return {
       userId: newUser.userId,
       email: newUser.email,
+      name: user.name,
+      division: user.division,
+      designation: user.designation,
       joined: newUser.joined ? newUser.joined.toISOString() : '',
-      modified: '',
+      lastModified: '',
       lastSignin: '',
       activated: activateUser,
       role: newUser.role,
@@ -230,45 +227,45 @@ export class UserService {
     };
   }
 
-  @Transactional()
-  async getUserById(
-    getUserByIdInput: string,
-  ): Promise<GetUserByIdResponseType> {
+  async getUserById(userId: string): Promise<GetUserByIdResponseType> {
     const user = await this.usersRepository.findOne({
-      userId: getUserByIdInput.userId,
+      where: {
+        userId: userId,
+      },
     });
     if (user) {
       return {
-        userId: user.userId,
-        email: user.email,
-        role: user.role,
-        joined: user.joined ? user.joined.toISOString() : '',
-        modified: user.modified ? user.modified.toISOString() : '',
-        lastSignin: user.lastSignin ? user.lastSignin.toISOString() : '',
-        activated: user.activated,
+        user: {
+          userId,
+          email: user.email,
+          name: user.name,
+          division: user.division,
+          designation: user.designation,
+          role: user.role,
+          joined: user.joined ? user.joined.toISOString() : '',
+          lastModified: user.lastModified
+            ? user.lastModified.toISOString()
+            : '',
+          lastSignin: user.lastSignin ? user.lastSignin.toISOString() : '',
+          activated: user.activated,
+        },
       };
     }
 
     throw new NotFoundException('User not found');
   }
 
-  // async SignupUsers(
-  //   request: naas.auth.user.ISignupUsersRequest,
-  // ): Promise<naas.auth.user.ISignupUsersResponse> {
-  //   const { data } = request;
-  //   const users = await Promise.map(data, async (item) => this.signup(item));
-  //   return { items: users };
-  // }
-
-  @Transactional()
   async getUser(query: Record<string, unknown>): Promise<IUser> {
-    const user = await this.usersRepository.findOne(query);
+    const user = await this.usersRepository.findOne({ where: query });
     if (user) {
       return {
         userId: user.userId,
         email: user.email,
+        name: user.name,
+        division: user.division,
+        designation: user.designation,
         joined: user.joined ? user.joined.toISOString() : '',
-        modified: user.modified ? user.modified.toISOString() : '',
+        lastModified: user.lastModified ? user.lastModified.toISOString() : '',
         lastSignin: user.lastSignin ? user.lastSignin.toISOString() : '',
         activated: user.activated,
       };
@@ -277,7 +274,6 @@ export class UserService {
     throw new NotFoundException('User not found');
   }
 
-  @Transactional()
   async getUsers(
     query: Record<string, unknown>,
     pagination?: PaginationInput,
@@ -292,15 +288,19 @@ export class UserService {
       return {
         ...users,
         items: R.pipe(
-          R.map((user) => ({
+          R.map((user: Record<string, any>) => ({
             userId: user.userId,
             email: user.email,
+            name: user.name,
+            division: user.division,
+            designation: user.designation,
             joined: user.joined ? user.joined.toISOString() : '',
-            modified: user.modified ? user.modified.toISOString() : '',
+            lastModified: user.lastModified
+              ? user.lastModified.toISOString()
+              : '',
             lastSignin: user.lastSignin ? user.lastSignin.toISOString() : '',
             activated: user.activated,
             role: user.role,
-            haveUnUniFiEarning: user.haveUnUniFiEarning,
           })),
           R.sortWith([R.descend(R.prop('joined'))]),
         )(items),
@@ -310,23 +310,19 @@ export class UserService {
     throw new NotFoundException('Users is empty');
   }
 
-  @Transactional()
-  async activateUser(
-    activateUserInput: string,
-  ): Promise<ActivateUserResponseType> {
-    const { userId, activationId } = activateUserInput;
-
+  async activateUser(activationId: string): Promise<ActivateUserResponseType> {
     const activation = await this.activationServices.getActivation({
-      ...(activationId && { activationId }),
-      ...(userId && { userId }),
+      activationId,
     });
 
-    if (!activation && !userId) {
+    if (!activation) {
       throw new NotFoundException('Activation not found');
     }
 
     const user = await this.usersRepository.findOne({
-      userId: activation.userId,
+      where: {
+        userId: activation.userId,
+      },
     });
     if (user.activated) {
       throw new BadRequestException('User already activated');
@@ -346,23 +342,28 @@ export class UserService {
     });
 
     return {
+      status: true,
       user: {
         userId: user.userId,
         email: user.email,
+        name: user.name,
+        division: user.division,
+        designation: user.designation,
         joined: user.joined ? user.joined.toISOString() : '',
-        modified: user.modified ? user.modified.toISOString() : '',
+        lastModified: user.lastModified ? user.lastModified.toISOString() : '',
         lastSignin: user.lastSignin ? user.lastSignin.toISOString() : '',
         activated: user.activated,
       },
     };
   }
 
-  @Transactional()
   async validateEmail(
     validateEmailInput: string,
   ): Promise<ValidateEmailResponseType> {
     const user = await this.usersRepository.findOne({
-      email: validateEmailInput,
+      where: {
+        email: validateEmailInput,
+      },
     });
     if (user) {
       throw new BadRequestException('Email already exists');
@@ -373,38 +374,42 @@ export class UserService {
     };
   }
 
-  @Transactional()
   async changeUserEmail(
     changeUserEmailRequest: ChangeUserEmailInput,
   ): Promise<ChangeUserEmailResponseType> {
     const { userId, newEmail } = changeUserEmailRequest;
     const userToUpdate = await this.usersRepository.findOne({
-      userId,
+      where: {
+        userId,
+      },
     });
     if (!userToUpdate) {
       throw new NotFoundException('User not found');
     }
 
     const user = await this.usersRepository.findOne({
-      email: newEmail,
+      where: {
+        email: newEmail,
+      },
     });
     if (user) {
       throw new BadRequestException('Email already exists');
     }
 
-    await this.usersRepository.changeUserEmail(userId, newEmail);
+    await this.updateUserEmailInDB(userId, newEmail);
 
     return {
       email: newEmail,
     };
   }
 
-  @Transactional()
   async changeUserPassword(
     changeUserPasswordRequest: ChangeUserPasswordInput,
   ): Promise<ChangeUserPasswordResponseType> {
     const user = await this.usersRepository.findOne({
-      userId: changeUserPasswordRequest.userId,
+      where: {
+        userId: changeUserPasswordRequest.userId,
+      },
     });
 
     if (user) {
@@ -430,21 +435,24 @@ export class UserService {
     throw new NotFoundException('User not found');
   }
 
-  @Transactional()
   async validatePassword(
     validatePasswordRequest: ValidatePasswordInput,
   ): Promise<ValidatePasswordResponseType> {
     let user = null;
     if (validatePasswordRequest.email) {
       user = await this.usersRepository.findOne({
-        email: validatePasswordRequest.email,
+        where: {
+          email: validatePasswordRequest.email,
+        },
       });
     } else if (validatePasswordRequest.activationId) {
       const activation = await this.activationServices.getActivation({
         activationId: validatePasswordRequest.activationId,
       });
       user = await this.usersRepository.findOne({
-        userId: activation.userId,
+        where: {
+          userId: activation.userId,
+        },
       });
     }
 
@@ -455,12 +463,39 @@ export class UserService {
       );
 
       if (isPasswordCorrect) {
-        return true;
+        return {
+          status: true,
+        };
       }
 
       throw new UnauthorizedException('Wrong password');
     }
 
     throw new NotFoundException('User not found');
+  }
+
+  async createUser(email: string, isAdmin: boolean): Promise<User> {
+    const newUser = new User();
+    newUser.email = email;
+    newUser.joined = new Date();
+    if (isAdmin) {
+      newUser.role = UserRole.ADMIN;
+    }
+    await this.usersRepository.save(newUser);
+    return newUser;
+  }
+
+  async updateUserEmailInDB(userId: string, email: string): Promise<User> {
+    const response = await this.usersRepository.update({ userId }, { email });
+
+    const { affected } = response;
+    if (affected === 0) {
+      throw new BadRequestException('Update user email failed');
+    }
+    const updatedUser = await this.usersRepository.findOne({
+      where: { userId },
+    });
+
+    return updatedUser;
   }
 }

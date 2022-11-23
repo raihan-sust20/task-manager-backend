@@ -29,7 +29,7 @@ export class TmJwtGuard implements CanActivate {
     private reflector: Reflector,
   ) {}
 
-  getUserIdsInArgs = R.curry((coreArgsData: Record<string, any>[]) =>
+  getUserIdsInArgs = R.curry((coreArgsData: Record<string, any>[]): string[] =>
     R.map(
       (coreArgsDataItem) => R.prop('userId', coreArgsDataItem),
       coreArgsData,

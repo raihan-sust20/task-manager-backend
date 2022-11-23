@@ -1,9 +1,5 @@
-import {
-  Field, ID, ObjectType, registerEnumType,
-} from '@nestjs/graphql';
-import { naas } from '../../proto/proto';
-
-export const { UserRole } = naas.auth.user;
+import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { UserRole } from '../entities/user.entity';
 
 registerEnumType(UserRole, {
   name: 'UserRole',
@@ -18,10 +14,19 @@ export class UserType {
   email?: string;
 
   @Field()
+  name?: string;
+
+  @Field()
+  division?: string;
+
+  @Field()
+  designation?: string;
+
+  @Field()
   joined?: string;
 
   @Field({ nullable: true })
-  modified?: string;
+  lastModified?: string;
 
   @Field()
   lastSignin?: string;
@@ -30,8 +35,5 @@ export class UserType {
   activated?: boolean;
 
   @Field(() => UserRole)
-  role?: number;
-
-  @Field({ nullable: true })
-  haveUnUniFiEarning?: boolean;
+  role?: string;
 }

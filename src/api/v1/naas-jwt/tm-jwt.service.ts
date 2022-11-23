@@ -8,7 +8,6 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { InjectRepository } from '@nestjs/typeorm';
-import { RefreshTokenDataRepository } from './refresh-token-data.repository';
 // constants
 import {
   accessTokenExpiry,
@@ -37,12 +36,15 @@ import { UserService } from '../user/user.service';
 import { UpdateAuthTokenInput } from './inputs/update-auth-token.input';
 // types
 import { UpdateAuthTokenResponseType } from './types/update-auth-token-response.type';
+import { RefreshTokenData } from './refresh-token-data.entity';
+import { Repository, UpdateResult } from 'typeorm';
+import { SignOutInput } from './inputs/sign-out.input';
 
 @Injectable()
 export class TmJwtService {
   constructor(
-    @InjectRepository(RefreshTokenDataRepository)
-    private refreshTokenDataRepository: RefreshTokenDataRepository,
+    @InjectRepository(RefreshTokenData)
+    private refreshTokenDataRepository: Repository<RefreshTokenData>,
 
     private readonly jwtService: JwtService,
 
@@ -112,9 +114,7 @@ export class TmJwtService {
   //   return R.omit(['status'], response);
   // }
 
-  async signOut(
-    signOutRequest: naas.auth.user.ISignOutRequest,
-  ): Promise<ISignOutMethodOutput> {
+  async signOut(signOutRequest: SignOutInput): Promise<ISignOutMethodOutput> {
     const { userId, idToken } = signOutRequest;
     await this.refreshTokenDataRepository.update(
       { userId, idToken },
@@ -149,7 +149,9 @@ export class TmJwtService {
     userId: string,
     idToken: string,
   ): Promise<IGetCurrentRefreshTokenDataMethodOutput> {
-    return this.refreshTokenDataRepository.findOne({ userId, idToken });
+    return this.refreshTokenDataRepository.findOne({
+      where: { userId, idToken },
+    });
   }
 
   async insertOrUpdateRefreshTokenData(
@@ -162,11 +164,9 @@ export class TmJwtService {
     );
 
     if (!currentRefreshTokenData) {
-      await this.refreshTokenDataRepository.insertRefreshTokenData(
-        refreshTokenData,
-      );
+      await this.insertRefreshTokenData(refreshTokenData);
     } else {
-      await this.refreshTokenDataRepository.updateRefreshTokenData(
+      await this.updateRefreshTokenData(
         currentRefreshTokenData,
         refreshTokenData,
       );
@@ -219,8 +219,10 @@ export class TmJwtService {
   private async getIdToken(userId: string): Promise<string> {
     const signedOutRefreshTokenData =
       await this.refreshTokenDataRepository.findOne({
-        userId,
-        isSignedOut: true,
+        where: {
+          userId,
+          isSignedOut: true,
+        },
       });
 
     const signedOutIdToken = R.view(
@@ -264,10 +266,7 @@ export class TmJwtService {
     isSignedOut: boolean,
   ): Promise<IDefineUpdateAuthTokenStatusMethodOutput> {
     if (refreshTokenInReq !== refreshTokenInDb) {
-      await this.refreshTokenDataRepository.invalidateRefreshToken(
-        userIdInReq,
-        idTokenInDb,
-      );
+      await this.invalidateRefreshToken(userIdInReq, idTokenInDb);
       return {
         status: UpdateAuthTokenResponseStatus.REFRESH_TOKEN_MISMATCH,
       };
@@ -297,9 +296,7 @@ export class TmJwtService {
   }
 
   private async getUserRole(userId: string): Promise<string> {
-    const userData = await this.userService.getUserById({
-      userId,
-    });
+    const userData = await this.userService.getUserById(userId);
 
     return R.prop('role', userData);
   }
@@ -401,5 +398,55 @@ export class TmJwtService {
     } catch {
       return null;
     }
+  }
+
+  async insertRefreshTokenData(
+    refreshTokenDataParam,
+  ): Promise<RefreshTokenData> {
+    const { refreshToken, refreshTokenExpiry, userId, idToken } =
+      refreshTokenDataParam;
+    const refreshTokenData: RefreshTokenData = new RefreshTokenData();
+    refreshTokenData.refreshToken = refreshToken;
+    refreshTokenData.refreshTokenExpiry = refreshTokenExpiry;
+    refreshTokenData.userId = userId;
+    refreshTokenData.idToken = idToken;
+    await this.refreshTokenDataRepository.save(refreshTokenData);
+    return refreshTokenData;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  async updateRefreshTokenData(
+    currentRefreshTokenDataParam,
+    refreshTokenDataParam,
+  ): Promise<RefreshTokenData> {
+    const { refreshToken, refreshTokenExpiry, userId, isValid, idToken } =
+      refreshTokenDataParam;
+
+    const currentData = currentRefreshTokenDataParam;
+    currentData.refreshToken = refreshToken;
+    currentData.refreshTokenExpiry = refreshTokenExpiry;
+    currentData.idToken = idToken;
+
+    await this.refreshTokenDataRepository.update(
+      { userId, idToken },
+      {
+        refreshToken,
+        refreshTokenExpiry,
+        isValid,
+        idToken,
+        isSignedOut: false,
+      },
+    );
+    return currentData;
+  }
+
+  async invalidateRefreshToken(
+    userId: string,
+    idToken: string,
+  ): Promise<UpdateResult> {
+    return this.refreshTokenDataRepository.update(
+      { userId, idToken },
+      { isValid: false },
+    );
   }
 }

@@ -26,4 +26,4 @@ export class JwtService implements OnModuleInit {
   onModuleInit(): void {
     this.authService = this.grpcClient.getService<AuthService>('AuthService');
   }
-
+}

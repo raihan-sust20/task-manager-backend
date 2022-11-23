@@ -7,12 +7,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NaasExceptionFilter } from '../exception-filter/exception.filter';
-// services
-import { JwtService } from './tm-jwt.service';
 // inputs
 import { UpdateAuthTokenInput } from './inputs/update-auth-token.input';
+import { SignOutInput } from './inputs/sign-out.input';
 // types
 import { UpdateAuthTokenResponseType } from './types/update-auth-token-response.type';
+import { SignOutResponseType } from './types/sign-out-response.type';
+// services
+import { TmJwtService } from './tm-jwt.service';
 
 /**
  * GraphQL resolver for JWT.
@@ -20,7 +22,7 @@ import { UpdateAuthTokenResponseType } from './types/update-auth-token-response.
 @Resolver()
 @UseFilters(NaasExceptionFilter)
 export class UserResolver {
-  constructor(private jwtService: JwtService) {}
+  constructor(private tmJwtService: TmJwtService) {}
 
   /**
    * Update Auth Token
@@ -30,7 +32,7 @@ export class UserResolver {
     @Args('updateAuthTokenInput')
     updateAuthTokenInput: UpdateAuthTokenInput,
   ): Promise<UpdateAuthTokenResponseType> {
-    const updateAuthTokenResponse = await this.jwtService.updateAuthToken(
+    const updateAuthTokenResponse = await this.tmJwtService.updateAuthToken(
       updateAuthTokenInput,
     );
     return updateAuthTokenResponse;
@@ -44,7 +46,7 @@ export class UserResolver {
     @Args('signOutInput')
     signOutInput: SignOutInput,
   ): Promise<SignOutResponseType> {
-    const signOutResponse = await this.userService.signOut(signOutInput);
+    const signOutResponse = await this.tmJwtService.signOut(signOutInput);
     return signOutResponse;
   }
 }

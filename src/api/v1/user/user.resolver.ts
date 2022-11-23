@@ -92,20 +92,6 @@ export class UserResolver {
   }
 
   /**
-   * Create an user
-   */
-  @Mutation(() => SignupUsersType)
-  @UseGuards(JwtGuard)
-  @Roles(['ADMIN'])
-  async signupUsers(
-    @Args('signupUsersInput')
-    signupUsersInput: SignupUsersInput,
-  ): Promise<SignupUsersType> {
-    const response = await this.userService.signupUsers(signupUsersInput);
-    return response;
-  }
-
-  /**
    * Get user by id
    */
   @Query(() => GetUserByIdResponseType)

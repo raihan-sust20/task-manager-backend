@@ -6,9 +6,12 @@ export enum UserRole {
 export interface IUser {
   userId?: string;
   email?: string;
+  name?: string;
+  division?: string;
+  designation: string;
   joined?: string;
-  modified?: string;
+  lastModified?: string;
   lastSignin?: string;
-  activated?: boolean
+  activated?: boolean;
   role?: UserRole;
 }

@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TmJwtGuard } from './tm-jwt.guard';
-import { TmJwtUser } from './tm-jwt.decorator';
 import { TmJwtService } from './tm-jwt.service';
 
+/**
+ * @note Tm = Task Manager
+ */
 /**
  * Module for dealing with JWT authentication.
  */

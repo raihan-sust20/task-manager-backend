@@ -29,11 +29,13 @@ export class TmJwtGuard implements CanActivate {
     private reflector: Reflector,
   ) {}
 
-  getUserIdsInArgs = R.curry((coreArgsData: Record<string, any>[]): string[] =>
-    R.map(
-      (coreArgsDataItem) => R.prop('userId', coreArgsDataItem),
-      coreArgsData,
-    ),
+  getUserIdsInArgs = R.curry(
+    (coreArgsData: Record<string, any>[]): string[] => {
+      return R.map(
+        (coreArgsDataItem) => R.prop('userId', coreArgsDataItem),
+        coreArgsData,
+      );
+    },
   );
 
   /**
@@ -50,11 +52,12 @@ export class TmJwtGuard implements CanActivate {
         return false;
       }
 
-      const userIdsInArgs = R.pipe(
-        this.getUserIdsInArgs,
+      const userIdsInArgs = R.pipe<Record<string, any>[], string[], string[]>(
+        this.getUserIdsInArgs as (param: Record<string, any[]>) => string[],
         // Filter out empty user ID and user IDs of any user(s) other than logged in user(if exists)
         R.filter(
-          (userIdInArgsItem) => userIdInArgsItem && userIdInArgsItem === userId,
+          (userIdInArgsItem: string) =>
+            userIdInArgsItem && userIdInArgsItem === userId,
         ),
       )(coreArgsData);
 

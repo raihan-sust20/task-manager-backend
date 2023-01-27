@@ -1,11 +1,6 @@
 import * as R from 'ramda';
 import { Resolver, Mutation, Args, Query, Context } from '@nestjs/graphql';
-import {
-  UsePipes,
-  ValidationPipe,
-  UseFilters,
-  UseGuards,
-} from '@nestjs/common';
+import { UseFilters } from '@nestjs/common';
 import { NaasExceptionFilter } from '../exception-filter/exception.filter';
 // inputs
 import { UpdateAuthTokenInput } from './inputs/update-auth-token.input';

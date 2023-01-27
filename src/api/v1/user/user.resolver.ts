@@ -8,8 +8,8 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { NaasExceptionFilter } from '../exception-filter/exception.filter';
-import { JwtService } from '../naas-jwt/jwt.service';
-import { JwtGuard } from '../naas-jwt/tm-jwt.guard';
+import { JwtService } from '../tm-jwt/jwt.service';
+import { JwtGuard } from '../tm-jwt/tm-jwt.guard';
 // types
 import { SigninResponseType } from './types/signin-response.type';
 import { SignupResponseType } from './types/signup-response.type';

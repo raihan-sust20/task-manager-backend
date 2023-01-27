@@ -30,6 +30,7 @@
     "@nestjs/typeorm": "^9.0.1",
     "@types/ramda": "^0.28.18",
     "bcrypt": "^5.1.0",
+    "class-validator": "^0.13.2",
     "nestjs-typeorm-paginate": "^4.0.2",
     "pg": "^8.8.0",
     "ramda": "^0.28.0",

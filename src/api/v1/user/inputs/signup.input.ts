@@ -1,8 +1,5 @@
 import { Field, InputType } from '@nestjs/graphql';
-import {
-  IsEmail, IsNotEmpty, IsString,
-} from 'class-validator';
-import { UserSettingsInput } from './user-settings.input';
+import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
 
 @InputType()
 export class SignupInput {
@@ -16,25 +13,17 @@ export class SignupInput {
   @IsString()
   password: string;
 
-  @Field({ defaultValue: 'en' })
+  @Field()
   @IsString()
-  lang: string;
+  name: string;
 
   @Field({ nullable: true })
   @IsString()
   adminKey: string;
 
-  @Field(() => UserSettingsInput)
-  settings: UserSettingsInput;
-
-  // TODO handle RBAC only admin should able to set skipActivationEmail
-  @Field({ nullable: true })
-  skipActivationEmail: boolean;
-
-  // TODO handle RBAC only admin should able to set skipActivationEmail
-  @Field({ nullable: true })
-  activateUser: boolean;
+  @Field()
+  division: string;
 
   @Field({ nullable: true })
-  createFirstSignin: boolean;
+  designation: string;
 }

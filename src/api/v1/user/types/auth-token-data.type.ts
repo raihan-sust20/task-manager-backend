@@ -3,17 +3,17 @@ import { Field, ObjectType } from '@nestjs/graphql';
 @ObjectType('AuthTokenDataType')
 export class AuthTokenDataType {
   @Field()
-  accessToken: string;
+  accessToken?: string;
 
   @Field()
-  accessTokenExpiry: string;
+  accessTokenExpiry?: string;
 
   @Field()
-  refreshToken: string;
+  refreshToken?: string;
 
   @Field()
-  refreshTokenExpiry: string;
+  refreshTokenExpiry?: string;
 
   @Field()
-  idToken: string;
+  idToken?: string;
 }

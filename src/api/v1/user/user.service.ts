@@ -47,7 +47,6 @@ import { ValidateForgotPasswordResponseType } from './types/validate-forgot-pass
 import { ResendActivationResponseType } from './types/resend-activation-response.type';
 import { GetActivationResponseType } from './types/get-activate-response.type';
 import { GetUsersResponseType } from './types/get-users-response.type';
-import { SignupUsersType } from './types/signup-users.type';
 // interfaces
 import { ISignupResponseData } from './interfaces/signup.interface';
 // entity
@@ -56,6 +55,7 @@ import { User, UserRole } from './entities/user.entity';
 import { ActivationService } from './activation/activation.service';
 import { SigninService } from './signin/signin.service';
 import { IUser } from './interfaces/user.interface';
+import { TmJwtService } from '../tm-jwt/tm-jwt.service';
 
 /**
  * Service methods for UserResolver.
@@ -70,6 +70,8 @@ export class UserService {
     private usersRepository: Repository<User>,
 
     private readonly signinServices: SigninService,
+
+    private readonly tmJwtService: TmJwtService,
 
     private configService: ConfigService,
 
@@ -131,28 +133,32 @@ export class UserService {
           );
         }
         await this.usersRepository.update(user.userId, {
-          lastSignin: new Date(),
+          lastSignin: new Date().toISOString(),
         });
-        const authToken = await this.naasJwtService.createAuthToken({
+        const authToken = await this.tmJwtService.createAuthToken({
           userId: user.userId,
           email: user.email,
           role: userRole,
         });
 
         return {
-          userId: user.userId,
-          email: user.email,
-          name: user.name,
-          division: user.division,
-          designation: user.designation,
-          joined: user.joined ? user.joined.toISOString() : '',
-          lastModified: user.lastModified
-            ? user.lastModified.toISOString()
-            : '',
-          lastSignin: user.lastSignin ? user.lastSignin.toISOString() : '',
-          activated: user.activated,
-          role: user.role,
-          ...authToken,
+          user: {
+            userId: user.userId,
+            email: user.email,
+            name: user.name,
+            division: user.division,
+            designation: user.designation,
+            joined: user.joined ? user.joined.toISOString() : '',
+            lastModified: user.lastModified
+              ? user.lastModified.toISOString()
+              : '',
+            lastSignin: user.lastSignin ? user.lastSignin.toISOString() : '',
+            activated: user.activated,
+            role: user.role,
+          },
+          authTokenData: {
+            ...authToken,
+          },
         };
       }
 
@@ -162,15 +168,24 @@ export class UserService {
     throw new UnauthorizedException('Wrong credentials, User not found');
   }
 
-  async signup(signupRequest: SignupInput): Promise<SignupResponseType> {
-    const {
-      email,
-      password,
-      lang,
-      adminKey,
-      skipActivationEmail,
-      activateUser,
-    } = signupRequest;
+  async createUser(signupInput: SignupInput, isAdmin: boolean): Promise<User> {
+    const { email, name, division, designation } = signupInput;
+    const newUser = new User();
+    newUser.email = email;
+    newUser.name = name;
+    newUser.division = division;
+    newUser.designation = designation;
+    newUser.joined = new Date();
+    if (isAdmin) {
+      newUser.role = UserRole.ADMIN;
+    }
+    await this.usersRepository.save(newUser);
+    return newUser;
+  }
+
+  async signup(signupInput: SignupInput): Promise<SignupResponseType> {
+    const { email, name, division, designation, password, adminKey } =
+      signupInput;
     const user = await this.usersRepository.findOne({
       where: {
         email,
@@ -184,7 +199,7 @@ export class UserService {
     if (adminKey !== 'N/A' && !isAdmin) {
       throw new UnauthorizedException('Invalid admin key');
     }
-    const newUser = await this.createUser(email, isAdmin);
+    const newUser = await this.createUser(signupInput, isAdmin);
     await this.signinServices.createSignin(email, password);
 
     const { userId, role } = newUser;
@@ -193,37 +208,27 @@ export class UserService {
       userId,
     );
 
-    const authToken = await this.naasJwtService.createAuthToken({
+    const authToken = await this.tmJwtService.createAuthToken({
       userId,
-      email: signupRequest.email,
+      email: signupInput.email,
       role,
     });
-    // admin feature: skip sending activation email, useful when we want to register
-    // the user account then send the user an email to make account on our dashboard
-    if (!skipActivationEmail) {
-      await this.activationServices.sendActivationEmail(
-        newActivation.activationId,
-        signupRequest.email,
-        lang || 'en',
-      );
-    }
-    // admin feature: activate user
-    if (activateUser) {
-      await this.activateUser(userId);
-    }
 
     return {
-      userId: newUser.userId,
-      email: newUser.email,
-      name: user.name,
-      division: user.division,
-      designation: user.designation,
-      joined: newUser.joined ? newUser.joined.toISOString() : '',
-      lastModified: '',
-      lastSignin: '',
-      activated: activateUser,
-      role: newUser.role,
-      ...authToken,
+      user: {
+        userId: newUser.userId,
+        email: newUser.email,
+        name: user.name,
+        division: user.division,
+        designation: user.designation,
+        joined: newUser.joined ? newUser.joined.toISOString() : '',
+        lastModified: '',
+        lastSignin: '',
+        role: newUser.role,
+      },
+      authTokenData: {
+        ...authToken,
+      },
     };
   }
 
@@ -302,7 +307,7 @@ export class UserService {
             activated: user.activated,
             role: user.role,
           })),
-          R.sortWith([R.descend(R.prop('joined'))]),
+          R.sortWith([R.descend(R.prop('lastSignin'))]),
         )(items),
       };
     }
@@ -374,10 +379,24 @@ export class UserService {
     };
   }
 
+  async updateUserEmailInDB(userId: string, email: string): Promise<User> {
+    const response = await this.usersRepository.update({ userId }, { email });
+
+    const { affected } = response;
+    if (affected === 0) {
+      throw new BadRequestException('Update user email failed');
+    }
+    const updatedUser = await this.usersRepository.findOne({
+      where: { userId },
+    });
+
+    return updatedUser;
+  }
+
   async changeUserEmail(
-    changeUserEmailRequest: ChangeUserEmailInput,
+    changeUserEmailInput: ChangeUserEmailInput,
   ): Promise<ChangeUserEmailResponseType> {
-    const { userId, newEmail } = changeUserEmailRequest;
+    const { userId, newEmail } = changeUserEmailInput;
     const userToUpdate = await this.usersRepository.findOne({
       where: {
         userId,
@@ -404,11 +423,11 @@ export class UserService {
   }
 
   async changeUserPassword(
-    changeUserPasswordRequest: ChangeUserPasswordInput,
+    changeUserPasswordInput: ChangeUserPasswordInput,
   ): Promise<ChangeUserPasswordResponseType> {
     const user = await this.usersRepository.findOne({
       where: {
-        userId: changeUserPasswordRequest.userId,
+        userId: changeUserPasswordInput.userId,
       },
     });
 
@@ -417,11 +436,11 @@ export class UserService {
         email: user.email,
       });
       if (
-        await bcrypt.compare(changeUserPasswordRequest.oldPassword, signin.hash)
+        await bcrypt.compare(changeUserPasswordInput.oldPassword, signin.hash)
       ) {
         await this.signinServices.changeUserPassword(
           user.email,
-          changeUserPasswordRequest.newPassword,
+          changeUserPasswordInput.newPassword,
         );
 
         return {
@@ -436,18 +455,18 @@ export class UserService {
   }
 
   async validatePassword(
-    validatePasswordRequest: ValidatePasswordInput,
+    validatePasswordInput: ValidatePasswordInput,
   ): Promise<ValidatePasswordResponseType> {
     let user = null;
-    if (validatePasswordRequest.email) {
+    if (validatePasswordInput.email) {
       user = await this.usersRepository.findOne({
         where: {
-          email: validatePasswordRequest.email,
+          email: validatePasswordInput.email,
         },
       });
-    } else if (validatePasswordRequest.activationId) {
+    } else if (validatePasswordInput.activationId) {
       const activation = await this.activationServices.getActivation({
-        activationId: validatePasswordRequest.activationId,
+        activationId: validatePasswordInput.activationId,
       });
       user = await this.usersRepository.findOne({
         where: {
@@ -459,7 +478,7 @@ export class UserService {
     if (user) {
       const isPasswordCorrect = await this.signinServices.validatePassword(
         user.email,
-        validatePasswordRequest.password,
+        validatePasswordInput.password,
       );
 
       if (isPasswordCorrect) {
@@ -472,30 +491,5 @@ export class UserService {
     }
 
     throw new NotFoundException('User not found');
-  }
-
-  async createUser(email: string, isAdmin: boolean): Promise<User> {
-    const newUser = new User();
-    newUser.email = email;
-    newUser.joined = new Date();
-    if (isAdmin) {
-      newUser.role = UserRole.ADMIN;
-    }
-    await this.usersRepository.save(newUser);
-    return newUser;
-  }
-
-  async updateUserEmailInDB(userId: string, email: string): Promise<User> {
-    const response = await this.usersRepository.update({ userId }, { email });
-
-    const { affected } = response;
-    if (affected === 0) {
-      throw new BadRequestException('Update user email failed');
-    }
-    const updatedUser = await this.usersRepository.findOne({
-      where: { userId },
-    });
-
-    return updatedUser;
   }
 }

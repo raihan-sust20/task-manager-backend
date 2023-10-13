@@ -16,6 +16,7 @@ import {
   IPaginationOptions,
 } from 'nestjs-typeorm-paginate';
 import * as R from 'ramda';
+import * as RA from 'ramda-adjunct';
 import { Repository } from 'typeorm';
 //inputs
 import { ChangeUserEmailInput } from './inputs/change-user-email.input';
@@ -28,7 +29,6 @@ import { SendForgotPasswordEmailInput } from './inputs/send-forgot-password-emai
 import { SigninInput } from './inputs/signin.input';
 import { SignOutInput } from './inputs/sign-out.input';
 import { SignupInput } from './inputs/signup.input';
-import { SignupUsersInput } from './inputs/signup-users.input';
 import { ValidateForgotPasswordInput } from './inputs/validate-forgot-password.input';
 import { ValidatePasswordInput } from './inputs/validate-password.input';
 // types
@@ -127,7 +127,7 @@ export class UserService {
         signin.hash,
       );
       if (isAdminKey || isPasswordMatch) {
-        if (!user.activated) {
+        if (RA.isFalse(user.activated)) {
           throw new UnauthorizedException(
             'User is not activated. Please check your email',
           );
@@ -196,7 +196,7 @@ export class UserService {
     }
 
     const isAdmin = this.ADMIN_SIGN_UP_UNLOCK_KEY === adminKey;
-    if (adminKey !== 'N/A' && !isAdmin) {
+    if (adminKey !== 'N/A' && RA.isFalse(isAdmin)) {
       throw new UnauthorizedException('Invalid admin key');
     }
     const newUser = await this.createUser(signupInput, isAdmin);

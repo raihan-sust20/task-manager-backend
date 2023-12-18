@@ -1,5 +1,4 @@
 import { IAuthToken } from './auth-token.interface';
-import { naas } from '../../proto/naas.auth';
 
 export interface ICreateAuthTokenData {
   userId?: string;

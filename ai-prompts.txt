@@ -1,0 +1,20 @@
+App Context:
+  Framework: NestJS
+  DB: MongoDB
+  Architecture: Monolithic
+
+Add dto class with class-validator and NestJS/Swagger decorator with detailed
+documentation.
+
+Task name: Implement API controller
+API path: 'signup'
+Controller method name: signup
+Service method name: signup
+MongoDB Schema Name: Auth
+Schema fields: first name, last name, email, password hash
+
+Upon successfull sign up send verification email to registered email
+address with totally free email service. Email sending task will be dispatched to RabbitMQ.
+To force user apply for resend verification email after certain time interval email
+sending data will be stored in Redis Cache. Password will be stored using mongoose schema pre method.
+mongoose schema should have virtual field to store Full Name.

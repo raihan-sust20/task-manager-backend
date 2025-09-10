@@ -1,14 +1,9 @@
 import { Module } from '@nestjs/common';
-import { UserResolver } from './user.resolver';
-import { UserService } from './user.service';
-import { TmJwtModule } from '../tm-jwt/tm-jwt.module';
+import { MongooseModule } from '@nestjs/mongoose';
+import { User, UserSchema } from './schemas/user.schema';
 
-/**
- * Module for working with Users.
- */
 @Module({
-  imports: [TmJwtModule],
-  providers: [UserService, UserResolver],
-  exports: [UserService],
+  imports: [MongooseModule.forFeature([{ name: User.name, schema: UserSchema }])],
+  exports: [MongooseModule],
 })
 export class UserModule {}

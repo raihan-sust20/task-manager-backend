@@ -1,19 +1,25 @@
 import * as R from 'ramda';
 import { join } from 'path';
 
-type envs = 'default' | 'development' | 'stage' | 'production';
+type envs = 'default' | 'dev' | 'stage' | 'prod';
 
 export const getMicroServiceUrl = R.curry(
   (urls: Record<envs, string>, nodeEnv: string) => {
     const url = urls[nodeEnv];
     return url || urls.default;
-  }
+  },
 );
 
-export const getEnvFilePath = (nodeEnv) => {
-  if (nodeEnv === 'development') {
-    return join(process.cwd(), 'src/api/v1/.env.development');
+export const getEnvFilePath = (nodeEnv: string) => {
+  if (R.isNil(nodeEnv)) {
+    return join(process.cwd(), '.env.dev');
   }
+  const envFiles = {
+    dev: '.env.dev',
+    stage: '.env.stage',
+    prod: '.env',
+  };
+  const envFileName = envFiles[nodeEnv];
 
-  return '.env';
+  return join(process.cwd(), envFileName);
 };
